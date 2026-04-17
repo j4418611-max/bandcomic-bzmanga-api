@@ -116,7 +116,12 @@ def search_comics(keyword, page):
                 cover = f"{cover}?width=200&quality=50"
             
             if comic_id and title:
-                results.append({"comic_id": comic_id, "title": title[:50], "cover_url": cover, "pages": 0})
+                results.append({
+                    "comic_id": comic_id, 
+                    "title": title[:50], 
+                    "cover_url": cover, 
+                    "pages": 0
+                })
         
         return jsonify({"page": page_num, "has_more": len(results) >= 20, "results": results[:20]})
     except Exception as e:
