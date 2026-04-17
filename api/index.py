@@ -113,7 +113,7 @@ def search_comics(keyword, page):
                     cover = 'https:' + cover
                 elif cover.startswith('/'):
                     cover = BASE_URL + cover
-                cover = f"{cover}?width=200&quality=50"
+                cover = f"{cover｝?width=150&quality=50"
             
             if comic_id and title:
                 results.append({
