@@ -88,6 +88,7 @@ def get_chapter_images(id, chapter):
 def search_comics(keyword, page):
     try:
         page_num = int(page) if page.isdigit() else 1
+        decoded_keyword= unquote(keyword)
         encoded = quote(keyword)
         url = f"{BASE_URL}/search?q={encoded}&page={page_num}"
         
