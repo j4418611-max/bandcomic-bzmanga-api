@@ -21,8 +21,8 @@ def get_config():
             "name": "包子漫画",
             "apiUrl": request.url_root.rstrip('/'),
             "detailPath": "/comic/",
-            "photoPath": "/chapter/",
-            "searchPath": "/search/",
+            "photoPath": "/chapter/<id>/<chapter>",
+            "searchPath": "/search/<keyword>/<page>",
             "type": "bzmanga"
         }
     })
