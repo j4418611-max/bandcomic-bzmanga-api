@@ -54,7 +54,7 @@ def get_comic_detail(id):
         return jsonify({
             "item_id": id,
             "name": name,
-            "page_count": len(chapters),
+            "page_count": first_chapter_image_count,
             "cover": cover,
             "tags": [],
             "total_chapters": len(chapters),
