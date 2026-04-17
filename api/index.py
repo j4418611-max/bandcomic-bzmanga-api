@@ -131,5 +131,6 @@ def search_comics(keyword, page):
 def index():
     return jsonify({"status": "腕上漫画-包子漫画API运行中", "docs": "访问 /config 查看配置"})
 
-if __name__ == '__main__':
-    app.run(debug=True)
+#Vercel部署不需要这行
+#if __name__ == '__main__':
+#    app.run(debug=True)
