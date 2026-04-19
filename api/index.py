@@ -1,261 +1,246 @@
 # -*- coding: utf-8 -*-
-import sys
-import os
 import json
-sys.stdout.reconfigure(encoding='utf-8')
-
-from flask import Flask, jsonify, request
-from flask_cors import CORS
-import requests
-from bs4 import BeautifulSoup
 import re
+import requests
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin, quote
 
 app = Flask(__name__)
 CORS(app)
 
-# ========== 内嵌包子漫画源配置 ==========
-SOURCE_JSON = {
-    "bookSourceName": "包子漫画",
-    "bookSourceUrl": "https://cn.bzmanga.com",
-    "bookSourceGroup": "漫画",
-    "httpUserAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36",
-    "ruleSearchUrl": "https://cn.bzmanga.com/search?q=searchKey&page=searchPage",
-    "ruleSearchList": ".comics-card",
-    "ruleSearchName": "h3@text",
-    "ruleSearchAuthor": "small@text",
-    "ruleSearchCoverUrl": "img@src",
-    "ruleSearchNoteUrl": "a@href",
-    "ruleBookName": "h1@text",
-    "ruleCoverUrl": ".comics-cover img@src",
-    "ruleChapterList": ".comics-chapters a",
-    "ruleChapterName": "@text",
-    "ruleChapterUrl": "@href",
-    "ruleContentUrl": ".comics-image img, amp-img, img[data-src]"
+# ------------------ 加载异次元源 JSON ------------------
+SOURCE_FILE = "source.json"          # 把下载的 819.json 放在项目根目录
+SOURCE_URL = "https://www.yckceo.com/yiciyuan/tuyuan/json/id/819.json"
+
+def load_source():
+    """优先从本地文件加载，否则从网络获取并缓存"""
+    try:
+        with open(SOURCE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        resp = requests.get(SOURCE_URL, timeout=10)
+        resp.encoding = "utf-8"
+        data = resp.json()
+        with open(SOURCE_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return data
+
+SOURCE = load_source()
+BASE_URL = SOURCE.get("bookSourceUrl", "https://cn.bzmanga.com")
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Referer": BASE_URL
 }
 
-class YiciyuanParser:
-    def __init__(self, source):
-        self.source = source
-        self.base_url = source.get('bookSourceUrl', '').rstrip('/')
-        self.headers = {
-            'User-Agent': source.get('httpUserAgent', 
-                'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36')
+# ------------------ 规则解析工具 ------------------
+def fetch_html(url):
+    """获取页面 BeautifulSoup 对象"""
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=10)
+        resp.encoding = "utf-8"
+        return BeautifulSoup(resp.text, "html.parser")
+    except Exception as e:
+        print(f"请求失败 {url}: {e}")
+        return None
+
+def apply_rule(soup, rule_str, base_url=BASE_URL):
+    """
+    执行异次元规则字符串（简化版，支持常用语法）
+    支持：
+      - css选择器 如 ".class a@href"
+      - 多个规则用 && 分隔（取第一个非空）
+      - @text / @href / @src 等属性
+      - ## 正则替换
+    """
+    if not rule_str or not soup:
+        return ""
+
+    # 按 && 分割，依次尝试
+    rules = rule_str.split("&&")
+    for rule in rules:
+        rule = rule.strip()
+        if not rule:
+            continue
+
+        # 分离选择器与属性
+        if "@" in rule:
+            selector, attr = rule.rsplit("@", 1)
+        else:
+            selector, attr = rule, "text"
+
+        # 如果选择器为空，直接用 soup 本身
+        if selector == "" or selector == "text":
+            el = soup
+        else:
+            try:
+                el = soup.select_one(selector)
+            except:
+                el = None
+
+        if not el:
+            continue
+
+        # 提取内容
+        if attr == "text":
+            value = el.get_text(strip=True)
+        elif attr in ("href", "src", "data-src", "data-original"):
+            value = el.get(attr, "")
+        else:
+            value = el.get(attr, "")
+
+        # 处理相对路径
+        if value and attr in ("href", "src"):
+            value = urljoin(base_url, value)
+
+        # 正则替换（如果规则中有 ## 部分）
+        if "##" in rule_str:
+            # 原规则整体可能包含替换，简化处理：提取正则部分
+            match = re.search(r"##(.*?)##", rule_str)
+            if match:
+                pattern = match.group(1)
+                # 这里只支持简单替换，可按需扩展
+                value = re.sub(pattern, "", value)
+
+        if value:
+            return value
+
+    return ""
+
+def parse_list(soup, rule_str, base_url=BASE_URL):
+    """解析列表规则，返回元素列表"""
+    if not rule_str or not soup:
+        return []
+
+    # 例如： ".list li"
+    selector = rule_str.split("@")[0].strip()
+    try:
+        return soup.select(selector)
+    except:
+        return []
+
+# ------------------ API 路由 ------------------
+@app.route("/api/search")
+def search():
+    keyword = request.args.get("keyword", "").strip()
+    if not keyword:
+        return jsonify({"code": -1, "msg": "缺少关键词"})
+
+    # 从源规则中获取搜索 URL 构造方式
+    search_rule = SOURCE.get("ruleSearch", {})
+    search_url = search_rule.get("url", "").replace("${keyword}", quote(keyword))
+
+    soup = fetch_html(search_url)
+    if not soup:
+        return jsonify({"code": -1, "msg": "搜索请求失败"})
+
+    # 获取列表元素
+    list_rule = search_rule.get("list", "")
+    items = parse_list(soup, list_rule, BASE_URL)
+
+    result = []
+    for item in items:
+        comic_id = apply_rule(item, search_rule.get("id", ""), BASE_URL)
+        name = apply_rule(item, search_rule.get("name", ""), BASE_URL)
+        cover = apply_rule(item, search_rule.get("cover", ""), BASE_URL)
+        author = apply_rule(item, search_rule.get("author", ""), BASE_URL)
+        status = apply_rule(item, search_rule.get("status", ""), BASE_URL)
+
+        if not comic_id:
+            continue
+
+        result.append({
+            "id": comic_id,
+            "name": name,
+            "cover": cover,
+            "author": author,
+            "status": status
+        })
+
+    return jsonify({"code": 0, "data": result})
+
+@app.route("/api/comic/<path:comic_id>")
+def comic_detail(comic_id):
+    # 根据 comic_id 构造详情页 URL
+    detail_rule = SOURCE.get("ruleBookInfo", {})
+    detail_url = detail_rule.get("url", "").replace("${bookId}", comic_id)
+
+    soup = fetch_html(detail_url)
+    if not soup:
+        return jsonify({"code": -1, "msg": "获取详情失败"})
+
+    # 提取基本信息
+    name = apply_rule(soup, detail_rule.get("name", ""), BASE_URL)
+    cover = apply_rule(soup, detail_rule.get("cover", ""), BASE_URL)
+    author = apply_rule(soup, detail_rule.get("author", ""), BASE_URL)
+    intro = apply_rule(soup, detail_rule.get("intro", ""), BASE_URL)
+    status = apply_rule(soup, detail_rule.get("status", ""), BASE_URL)
+
+    # 提取章节列表
+    chapter_rule = SOURCE.get("ruleChapter", {})
+    chapter_list_rule = chapter_rule.get("list", "")
+    chapter_items = parse_list(soup, chapter_list_rule, BASE_URL)
+
+    chapters = []
+    for idx, item in enumerate(chapter_items):
+        chap_id = apply_rule(item, chapter_rule.get("id", ""), BASE_URL)
+        chap_name = apply_rule(item, chapter_rule.get("name", ""), BASE_URL)
+        if chap_id:
+            chapters.append({
+                "id": chap_id,
+                "name": chap_name or f"第{idx+1}话"
+            })
+
+    return jsonify({
+        "code": 0,
+        "data": {
+            "id": comic_id,
+            "name": name,
+            "cover": cover,
+            "author": author,
+            "intro": intro,
+            "status": status,
+            "chapters": chapters
         }
-    
-    def _get_html(self, url):
-        try:
-            resp = requests.get(url, headers=self.headers, timeout=15)
-            resp.encoding = 'utf-8'
-            return BeautifulSoup(resp.text, 'html.parser')
-        except Exception as e:
-            print(f"Error fetching {url}: {e}")
-            return None
-    
-    def _parse_rule(self, soup, rule, default=""):
-        if not rule or not soup:
-            return default
-        
-        try:
-            if '@' in rule:
-                selector, attr = rule.split('@', 1)
-                elem = soup.select_one(selector.strip())
-                if not elem:
-                    return default
-                
-                if attr == 'text':
-                    return elem.get_text(strip=True)
-                else:
-                    return elem.get(attr, default)
-            else:
-                elem = soup.select_one(rule)
-                return elem.get_text(strip=True) if elem else default
-        except Exception as e:
-            print(f"Parse error: {e}")
-            return default
-
-    def search(self, keyword, page=1):
-        try:
-            search_url = self.source.get('ruleSearchUrl', '')
-            url = search_url.replace('searchKey', keyword).replace('searchPage', str(page))
-            if not url.startswith('http'):
-                url = self.base_url + url
-            
-            soup = self._get_html(url)
-            if not soup:
-                return {"page": page, "has_more": False, "results": []}
-            
-            list_rule = self.source.get('ruleSearchList', '')
-            items = soup.select(list_rule) if list_rule else []
-            
-            results = []
-            for item in items:
-                href = self._parse_rule(item, self.source.get('ruleSearchNoteUrl', 'a@href'), "")
-                
-                comic_id = ""
-                if href:
-                    for p in [r'/comics/(\d+)', r'/comic/(\d+)', r'/(\d+)\.html']:
-                        m = re.search(p, href)
-                        if m:
-                            comic_id = m.group(1)
-                            break
-                
-                title = self._parse_rule(item, self.source.get('ruleSearchName', 'h3@text'), "未知")
-                
-                cover = self._parse_rule(item, self.source.get('ruleSearchCoverUrl', 'img@src'), "")
-                if cover.startswith('//'):
-                    cover = 'https:' + cover
-                elif cover.startswith('/'):
-                    cover = self.base_url + cover
-                
-                if comic_id and title:
-                    results.append({
-                        "comic_id": comic_id,
-                        "title": title[:50],
-                        "cover_url": cover,
-                        "pages": 0
-                    })
-            
-            return {
-                "page": page,
-                "has_more": len(results) >= 20,
-                "results": results[:20]
-            }
-        except Exception as e:
-            print(f"Search error: {e}")
-            return {"page": page, "has_more": False, "results": [], "error": str(e)}
-
-    def get_detail(self, comic_id):
-        try:
-            urls = [
-                f"{self.base_url}/comics/{comic_id}.html",
-                f"{self.base_url}/comic/{comic_id}",
-                f"{self.base_url}/comics/{comic_id}"
-            ]
-            
-            soup = None
-            for url in urls:
-                soup = self._get_html(url)
-                if soup:
-                    break
-            
-            if not soup:
-                return None
-            
-            name = self._parse_rule(soup, self.source.get('ruleBookName', 'h1@text'), "未知漫画")
-            
-            cover = self._parse_rule(soup, self.source.get('ruleCoverUrl', '.comics-cover img@src'), "")
-            if cover.startswith('//'):
-                cover = 'https:' + cover
-            elif cover.startswith('/'):
-                cover = self.base_url + cover
-            
-            chapter_rule = self.source.get('ruleChapterList', '.comics-chapters a')
-            elems = soup.select(chapter_rule) if chapter_rule else []
-            
-            chapters = []
-            for elem in elems:
-                href = self._parse_rule(elem, self.source.get('ruleChapterUrl', 'a@href'), "")
-                
-                chapter_id = ""
-                if href:
-                    m = re.search(r'/(\d+)(?:\.html)?$', href)
-                    if m:
-                        chapter_id = m.group(1)
-                
-                ch_name = self._parse_rule(elem, self.source.get('ruleChapterName', 'a@text'), f"第{len(chapters)+1}话")
-                
-                if chapter_id:
-                    chapters.append({
-                        "id": chapter_id,
-                        "name": ch_name
-                    })
-            
-            return {
-                "item_id": comic_id,
-                "name": name,
-                "cover": cover,
-                "chapters": chapters[:50]
-            }
-        except Exception as e:
-            print(f"Detail error: {e}")
-            return None
-
-    def get_images(self, comic_id, chapter_id):
-        try:
-            urls = [
-                f"{self.base_url}/comics/{comic_id}/{chapter_id}",
-                f"{self.base_url}/comic/{comic_id}/{chapter_id}.html",
-                f"{self.base_url}/chapter/{comic_id}/{chapter_id}"
-            ]
-            
-            soup = None
-            for url in urls:
-                soup = self._get_html(url)
-                if soup:
-                    break
-            
-            if not soup:
-                return {"title": f"第{chapter_id}章", "images": []}
-            
-            content_rule = self.source.get('ruleContentUrl', '.comics-image img, amp-img, img[data-src]')
-            elems = soup.select(content_rule) if content_rule else []
-            
-            images = []
-            for elem in elems:
-                src = elem.get('src') or elem.get('data-src') or elem.get('data-original')
-                if src and not src.startswith('data:'):
-                    if src.startswith('//'):
-                        src = 'https:' + src
-                    elif src.startswith('/'):
-                        src = self.base_url + src
-                    
-                    images.append({"url": src})
-            
-            return {
-                "title": f"第{chapter_id}章",
-                "images": images
-            }
-        except Exception as e:
-            print(f"Images error: {e}")
-            return {"title": f"第{chapter_id}章", "images": [], "error": str(e)}
-
-parser = YiciyuanParser(SOURCE_JSON)
-
-@app.route('/config')
-def get_config():
-    return jsonify({
-        "name": SOURCE_JSON.get('bookSourceName', '漫画源'),
-        "apiUrl": request.url_root.rstrip('/'),
-        "detailPath": "/comic/",
-        "photoPath": "/chapter/<id>/<chapter>",
-        "searchPath": "/search/<keyword>/<page>",
-        "type": "yiciyuan"
     })
 
-@app.route('/search/<keyword>/<page>')
-def search(keyword, page):
-    result = parser.search(keyword, int(page))
-    return jsonify(result)
+@app.route("/api/chapter/<path:chapter_id>")
+def chapter_images(chapter_id):
+    # 章节图片页
+    content_rule = SOURCE.get("ruleContent", {})
+    content_url = content_rule.get("url", "").replace("${chapterId}", chapter_id)
 
-@app.route('/comic/<id>')
-def comic_detail(id):
-    result = parser.get_detail(id)
-    if not result:
-        return jsonify({"error": "not found"}), 404
-    return jsonify(result)
+    soup = fetch_html(content_url)
+    if not soup:
+        return jsonify({"code": -1, "msg": "获取章节内容失败"})
 
-@app.route('/chapter/<id>/<chapter>')
-def chapter_images(id, chapter):
-    result = parser.get_images(id, chapter)
-    return jsonify(result)
+    # 图片列表规则
+    img_rule = content_rule.get("image", "")
+    if img_rule:
+        # 可能是单张或列表，先尝试列表
+        img_items = parse_list(soup, img_rule.split("@")[0].strip(), BASE_URL)
+        images = []
+        for el in img_items:
+            img_url = apply_rule(el, img_rule, BASE_URL)
+            if img_url:
+                images.append(img_url)
+        if not images:
+            # 可能是直接取属性
+            img_url = apply_rule(soup, img_rule, BASE_URL)
+            if img_url:
+                images = [img_url]
+    else:
+        images = []
 
-@app.route('/')
+    # 有时图片地址是 data-src 之类，已在 apply_rule 中处理
+
+    return jsonify({"code": 0, "data": images})
+
+@app.route("/")
 def index():
-    return jsonify({
-        "status": "running",
-        "source": SOURCE_JSON.get('bookSourceName'),
-        "endpoints": ["/config", "/search/<keyword>/<page>", "/comic/<id>", "/chapter/<id>/<chapter>"]
-    })
+    return "腕上漫画 API 运行中，请使用 /api/search、/api/comic/xxx、/api/chapter/xxx"
 
-if __name__ == '__main__':
-    app.run(debug=True)
+# Vercel 入口
+def handler(environ, start_response):
+    return app(environ, start_response)
