@@ -9,6 +9,7 @@ from flask_cors import CORS
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, quote
 
+# Vercel 需要这个变量名
 app = Flask(__name__)
 CORS(app)
 
@@ -32,13 +33,9 @@ def load_source():
             print(f"尝试加载 {path} 失败: {e}")
             continue
     
-    # 如果文件找不到，返回硬编码的包子漫画配置（作为fallback）
-    print("警告：使用内置默认配置")
-    return get_default_source()
-
-def get_default_source():
-    """内置默认书源配置（包子漫画）"""
+    # 内置默认配置（包子漫画）
     return {
+        "bookSourceName": "包子漫画",
         "bookSourceUrl": "https://cn.bzmanga.com",
         "httpUserAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36",
         "ruleSearch": {
@@ -46,8 +43,8 @@ def get_default_source():
             "list": ".comics-card",
             "name": "h3@text",
             "author": "small@text",
-            "cover": "amp-img[noloading^=\"\"]@src@Header:{Referer:host}",
-            "status": ".tags@text|.tab@text",
+            "cover": "amp-img@src",
+            "status": ".tags@text",
             "id": "a@href"
         },
         "ruleBookInfo": {
@@ -56,9 +53,9 @@ def get_default_source():
             "author": ".comics-detail__author@text",
             "cover": ".comics-detail__cover amp-img@src",
             "intro": ".comics-detail__desc@html",
-            "status": ".tag-list@span@text",
-            "chapterList": ".l-box@.pure-g!0@.comics-chapters||.pure-g@.comics-chapters",
-            "chapterName": "a@text\\n@js:\\na = \"\" + result",
+            "status": ".tag-list span@text",
+            "chapterList": ".comics-chapters",
+            "chapterName": "a@text",
             "chapterUrl": "a@href"
         },
         "ruleContent": {
@@ -92,9 +89,8 @@ def apply_rule(element, rule_str, base_url=BASE_URL):
     if not rule_str or not element:
         return ""
     
-    # 处理 @js: 规则（简单实现）
+    # 处理 @js: 规则（简化）
     if "@js:" in rule_str:
-        # 腕上漫画通常不需要复杂js，这里简化处理
         rule_str = rule_str.split("@js:")[0].strip()
     
     # 分离选择器和属性
@@ -152,7 +148,6 @@ def parse_list(soup, rule_str):
     if not rule_str or not soup:
         return []
     
-    # 处理 || 多选择器
     if "||" in rule_str:
         selectors = [s.strip() for s in rule_str.split("||")]
         for sel in selectors:
@@ -187,8 +182,6 @@ def search():
     
     search_rule = SOURCE.get("ruleSearch", {})
     search_url = search_rule.get("url", "").replace("searchKey", quote(keyword))
-    
-    # 兼容不同占位符
     search_url = search_url.replace("${key}", quote(keyword))
     
     soup = fetch_html(search_url)
@@ -202,8 +195,8 @@ def search():
         comic_id = apply_rule(item, search_rule.get("id", ""))
         if not comic_id:
             continue
-            
-        # 提取ID（从URL中提取）
+        
+        # 提取ID
         if "/" in comic_id:
             comic_id = comic_id.rstrip("/").split("/")[-1]
         
@@ -243,18 +236,16 @@ def comic_detail(comic_id):
     status = apply_rule(soup, detail_rule.get("status", ""))
     
     # 解析章节列表
-    chapter_rule = detail_rule
-    chapter_items = parse_list(soup, chapter_rule.get("chapterList", ""))
+    chapter_items = parse_list(soup, detail_rule.get("chapterList", ""))
     chapters = []
     
     for item in chapter_items:
-        chap_id = apply_rule(item, chapter_rule.get("chapterUrl", ""))
+        chap_id = apply_rule(item, detail_rule.get("chapterUrl", ""))
         if chap_id:
-            # 提取章节ID
             if "/" in chap_id:
                 chap_id = chap_id.rstrip("/").split("/")[-1]
             
-            chap_name = apply_rule(item, chapter_rule.get("chapterName", ""))
+            chap_name = apply_rule(item, detail_rule.get("chapterName", ""))
             chapters.append({
                 "id": chap_id,
                 "name": chap_name or "未知章节"
@@ -287,7 +278,6 @@ def chapter_images(chapter_id):
     images = []
     
     if img_rule:
-        # 处理 || 多属性
         img_attrs = [a.strip() for a in img_rule.split("||")]
         
         for attr in img_attrs:
@@ -303,7 +293,6 @@ def chapter_images(chapter_id):
                 for el in img_items:
                     img_url = el.get(img_attr, "")
                     if img_url:
-                        # 处理相对路径
                         if img_url.startswith("//"):
                             img_url = "https:" + img_url
                         elif img_url.startswith("/"):
@@ -322,6 +311,6 @@ def chapter_images(chapter_id):
         "data": images
     })
 
-# Vercel 入口
+# Vercel 入口（不要删）
 if __name__ == "__main__":
     app.run(debug=True)
