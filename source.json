@@ -1,1 +1,30 @@
-[{"bookDelayTime":"","bookSingleThread":"否","bookSourceGroup":"◯ 漫画","bookSourceName":"◯ 包子漫画","bookSourceType":"漫画","bookSourceUrl":"https:\/\/cn.bzmanga.com","enable":true,"httpUserAgent":"Mozilla\/5.0 (Linux; Android 10; K) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/116.0.0.0 Mobile Safari\/537.36","lastUpdateTime":0,"loginUrl":"","loginUrlResult":"","ruleBookAuthor":".comics-detail__author@text","ruleBookContent":"amp-img@data-src","ruleBookContentDecoder":"","ruleBookKind":".tag-list@span@text","ruleBookLastChapter":"","ruleBookName":"","ruleBookUrlPattern":"","ruleChapterId":"","ruleChapterList":".l-box@.pure-g!0@.comics-chapters||.pure-g@.comics-chapters","ruleChapterName":"a@text\n@js:\na = \" \" + result","ruleChapterParentId":"","ruleChapterParentName":"","ruleChapterUrl":"","ruleChapterUrlNext":"","ruleContentUrl":"a@href","ruleContentUrlNext":"@js:\nnext = \".next_chapter\";\na = org.jsoup.Jsoup.parse(result).select(next);\n\n\nP = RegExp(\"href.*?(下一頁|下一页)\");\ns = (String(a).match(P) || [])[0] || 0;\n\t\n\np = 'href=\"([^\"].*?)\"';\nbaseUrl = s != 0 ? s.match(RegExp(p))[1] : 0;\n\nbaseUrl","ruleCoverDecoder":"","ruleCoverUrl":"","ruleFindUrl":"◯ 推荐::https:\/\/cn.bzmanga.com\/index2\n\n⚪︎ 最新::\/list\/new\n\n⚪︎ 玄幻 ::\/classify?type=xuanhuan&region=all&state=all&filter=*&page=searchPage\n\n⚪︎ 热血 ::\/classify?type=rexie&region=all&state=all&filter=*&page=searchPage\n\n⚪︎ 后宫 ::\/classify?type=hougong&region=all&state=all&filter=*&page=searchPage\n\n⚪︎ 科幻 ::\/classify?type=kehuan&region=all&state=all&filter=*&page=searchPage\n\n⚪︎ 穿越 ::\/classify?type=chuanyue&region=all&state=all&filter=*&page=searchPage\n\n⚪︎ 冒险 ::\/classify?type=mouxian&region=all&state=all&filter=*&page=searchPage\n\n⚪︎ 都市 ::\/classify?type=dushi&region=all&state=all&filter=*&page=searchPage\n\n⚪︎ 古风 ::\/classify?type=gufeng&region=all&state=all&filter=*&page=searchPage\n\n\n\n⚪︎ 全部 ::\/classify?type=all&region=all&state=all&filter=*&page=searchPage\n⚪︎ 恋爱 ::\/classify?type=lianai&region=all&state=all&filter=*&page=searchPage\n⚪︎ 纯爱 ::\/classify?type=chunai&region=all&state=all&filter=*&page=searchPage\n⚪︎ 异能 ::\/classify?type=yineng&region=all&state=all&filter=*&page=searchPage\n⚪︎ 悬疑 ::\/classify?type=xuanyi&region=all&state=all&filter=*&page=searchPage\n⚪︎ 剧情 ::\/classify?type=juqing&region=all&state=all&filter=*&page=searchPage\n⚪︎ 奇幻 ::\/classify?type=qihuan&region=all&state=all&filter=*&page=searchPage\n⚪︎ 推理 ::\/classify?type=tuili&region=all&state=all&filter=*&page=searchPage\n⚪︎ 武侠 ::\/classify?type=wuxia&region=all&state=all&filter=*&page=searchPage\n⚪︎ 格斗 ::\/classify?type=gedou&region=all&state=all&filter=*&page=searchPage\n⚪︎ 战争 ::\/classify?type=zhanzheng&region=all&state=all&filter=*&page=searchPage\n⚪︎ 搞笑 ::\/classify?type=gaoxiao&region=all&state=all&filter=*&page=searchPage\n⚪︎ 大女主 ::\/classify?type=danuzhu&region=all&state=all&filter=*&page=searchPage\n⚪︎ 总裁 ::\/classify?type=zongcai&region=all&state=all&filter=*&page=searchPage\n⚪︎ 日常 ::\/classify?type=richang&region=all&state=all&filter=*&page=searchPage\n⚪︎ 韩漫 ::\/classify?type=hanman&region=all&state=all&filter=*&page=searchPage\n⚪︎ 少年 ::\/classify?type=shaonian&region=all&state=all&filter=*&page=searchPage\n⚪︎ 其它 ::\/classify?type=qita&region=all&state=all&filter=*&page=searchPage","ruleIntroduce":".comics-detail__desc@html","ruleSearchAuthor":"small@text","ruleSearchCoverDecoder":"","ruleSearchCoverUrl":"amp-img[noloading^=\"\"]@src@Header:{Referer:host}","ruleSearchKind":"span@text","ruleSearchLastChapter":".tags@text|.tab@text","ruleSearchList":".comics-card","ruleSearchName":"h3@text","ruleSearchNoteUrl":"a@href","ruleSearchUrl":"https:\/\/cn.bzmanga.com\/search?q=searchKey","ruleSearchUrlNext":"","serialNumber":5,"sourceRemark":"","weight":8103}]
+{
+  "bookSourceName": "包子漫画",
+  "bookSourceUrl": "https://cn.bzmanga.com",
+  "bookSourceType": "漫画",
+  "httpUserAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36...",
+  "ruleSearch": {
+    "url": "https://cn.bzmanga.com/search?q=searchKey",
+    "list": ".comics-card",
+    "name": "h3@text",
+    "author": "small@text",
+    "cover": "amp-img@src",
+    "status": ".tags@text",
+    "id": "a@href"
+  },
+  "ruleBookInfo": {
+    "url": "https://cn.bzmanga.com/comics/${bookId}",
+    "name": ".comics-detail__title@text",
+    "author": ".comics-detail__author@text",
+    "cover": ".comics-detail__cover amp-img@src",
+    "intro": ".comics-detail__desc@html",
+    "status": ".tag-list span@text",
+    "chapterList": ".comics-chapters",
+    "chapterName": "a@text",
+    "chapterUrl": "a@href"
+  },
+  "ruleContent": {
+    "url": "https://cn.bzmanga.com/chapter/${chapterId}",
+    "image": ".comic-contain amp-img@data-src||.comic-contain amp-img@src"
+  }
+}
